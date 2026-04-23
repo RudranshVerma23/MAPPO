@@ -65,6 +65,7 @@ def train():
     # optimizer = optim.Adam(loss_module.parameters(), lr=3e-4)
     actor_optimizer = optim.Adam(prob_actor.parameters(), lr=3e-4)
     critic_optimizer = optim.Adam(centralized_critic.parameters(), lr=5e-4)
+    prev_batch_last_uav0 = None
     # --- THE TRAINING LOOP ---
     for i, data in enumerate(collector):
         
@@ -123,8 +124,17 @@ def train():
         
         p = power_ratios + 1e-9
         entropy = -torch.sum(p * torch.log(p), dim=-1).mean()
-        print(f"Batch {i} | UAV 0 Start Pos: {data['uav_pos'][0, 0]}")
-        print(f"Batch {i} | UAV 0 End Pos: {data['next', 'uav_pos'][0, -1]}")
+
+        # Continuity diagnostics: verify s_{t+1} == next s_t for UAV 0.
+        uav0_start = data["uav_pos"][0, 0]
+        uav0_end = data["next", "uav_pos"][-1, 0]
+        within_batch_err = (data["uav_pos"][1:, 0] - data["next", "uav_pos"][:-1, 0]).abs().max().item()
+        cross_batch_err = float("nan") if prev_batch_last_uav0 is None else (uav0_start - prev_batch_last_uav0).abs().max().item()
+        prev_batch_last_uav0 = uav0_end.detach().clone()
+
+        print(f"Batch {i} | UAV0 Start Pos(t=0): {uav0_start}")
+        print(f"Batch {i} | UAV0 End Pos(t=T): {uav0_end}")
+        print(f"Batch {i} | Continuity | within_batch_max_err={within_batch_err:.3e} | cross_batch_max_err={cross_batch_err:.3e}")
         # --- C. Logging Stage-Aware Performance ---
         if i % 10 == 0:
         
